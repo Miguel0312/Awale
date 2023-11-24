@@ -5,10 +5,10 @@ CFLAGS=-I$(IDIR)
 ODIR=obj
 LDIR =../lib
 
-_DEPS = Awale.h
+_DEPS = Awale.h LinkedList.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = Awale.o main.o 
+_OBJ = Awale.o LinkedList.o main.o 
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 

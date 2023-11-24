@@ -12,6 +12,9 @@ GameState* newGame() {
     game->board[i] = INITIAL_SEEDS;
   }
 
+  game->replay.root = NULL;
+  game->replay.cur = NULL;
+
   return game;
 }
 
@@ -74,10 +77,47 @@ bool makeMove(int n, GameState* game) {
   }
 
   game->turn = 1 - game->turn;
+
+  if(game->replay.root == NULL) {
+    game->replay.root = game->replay.cur = newList(n);
+  } else {
+    game->replay.cur = addNext(game->replay.cur, n);
+  }
+
   return true;
 }
 
 bool hasEnded(GameState* game) {
   return game->scores[0] > WINNING_SCORE || game->scores[1] > WINNING_SCORE || 
     (game->scores[0] + game->scores[1] == 2 * WINNING_SCORE);
+}
+
+void saveGame(char *fileName, GameState *game) {
+  FILE* file = fopen(fileName, "w");
+
+  Node* cur = game->replay.root;
+  while(cur) {
+    fprintf(file, "%d ", cur->val);
+    cur = cur->next;
+  }
+
+  fclose(file);
+}
+
+void replayGame(char *fileName) {
+  FILE* file = fopen(fileName, "r");
+
+  GameState* game = newGame();
+  renderGame(game);
+  printf("Press 'Enter' to continue");
+  getchar();
+  int move;
+  while(fscanf(file, "%d ", &move) == 1) {
+    makeMove(move, game);
+    renderGame(game);
+    printf("Press 'Enter' to continue");
+    getchar();
+  }
+
+  fclose(file);
 }

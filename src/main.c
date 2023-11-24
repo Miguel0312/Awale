@@ -15,5 +15,9 @@ int main() {
     }
   }
 
+  saveGame("myGame", game);
+
+  // replayGame("myGame.txt");
+
   return 0;
 }
