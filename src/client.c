@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "client.h"
-#include "protocol.h"
-#include "server.h"
+#include "../include/client.h"
+#include "../include/protocol.h"
+#include "../include/server.h"
 
 static void init(void) {
 #ifdef WIN32
@@ -41,14 +41,19 @@ static void show_start_menu() {
 static void appClient(const char *address, const char *name) {
   SOCKET sock = init_connection_client(address);
   char buffer[BUF_SIZE];
+  GameState* game = newGame();
+  int status = MENU_NOT_SHOWN;
 
   fd_set rdfs;
 
   /* send our name */
   write_server(sock, name);
 
-  show_start_menu();
   while (1) {
+    if(status == MENU_NOT_SHOWN) {
+      show_start_menu();
+      status = MENU_SHOWN;
+    }
     FD_ZERO(&rdfs);
 
     /* add STDIN_FILENO */
@@ -64,26 +69,39 @@ static void appClient(const char *address, const char *name) {
 
     /* something from standard input : i.e keyboard */
     if (FD_ISSET(STDIN_FILENO, &rdfs)) {
-      fgets(buffer, BUF_SIZE - 1, stdin);
-      {
-        char *p = NULL;
-        p = strstr(buffer, "\n");
-        if (p != NULL) {
-          *p = 0;
-        } else {
-          /* fclean */
-          buffer[BUF_SIZE - 1] = 0;
+      if(fgets(buffer, BUF_SIZE - 1, stdin) == NULL || buffer[0] == '\n') {
+        continue;
+      }
+      char *p = NULL;
+      p = strstr(buffer, "\n");
+      if (p != NULL) {
+        *p = 0;
+      } else {
+        /* fclean */
+        buffer[BUF_SIZE - 1] = 0;
+      }
+      if(status == MENU_SHOWN) {
+        char option = buffer[0];
+        switch (option) {
+          case '1': {
+            printf("Enter the player name: ");
+            char buf[MAX_USERNAME_SIZE];
+            scanf("%s", buf);
+            challenge_request(sock, buf);
+            break;
+          }
         }
-      }
-      char option = buffer[0];
-      switch (option) {
-      case '1': {
-        printf("Enter the player name: ");
-        char buf[MAX_USERNAME_SIZE];
-        scanf("%s", buf);
-        challenge_request(sock, buf);
-        break;
-      }
+      } else if(status == PLAYER_TURN) {
+        buffer[1] = atoi(buffer) - 1;
+        if(buffer[1] < 0 || buffer[1] >= 12) {
+          printf("Invalid value %d. Try again.\n", (int)buffer[1] + 1);
+          continue;
+        }
+        buffer[0] = MOVE_DATA; 
+        write_server(sock, buffer);
+      } else if(status == PLAYER_WAIT) {
+        printf("It is not your turn. You must wait.\n");
+        continue;
       }
     } else if (FD_ISSET(sock, &rdfs)) {
       int n = read_server(sock, buffer);
@@ -102,12 +120,32 @@ static void appClient(const char *address, const char *name) {
           memcpy(response + 1, challenger, strlen(challenger));
           response[1 + strlen(challenger)] = 0;
           write_server(sock, response);
+          status = PLAYER_TURN;
         }
         break;
       }
       case CHALLENGE_ACCEPTED: {
         char *challengee = &buffer[1];
         printf("Challenge to %s accepted\n", challengee);
+        status = PLAYER_TURN;
+        break;
+      }
+      // TODO: Write to the user if he plays first or second
+      case GAME_DATA: {
+        game->turn = buffer[1];
+        for(int i = 0; i < PLAYERS; i++) {
+          game->scores[i] = buffer[2 + i];
+        }
+        for(int i = 0; i < BOARD_SIZE; i++) {
+          game->board[i] = buffer[2 + PLAYERS + i];
+        }
+        renderGame(game);
+        if(game->turn == 0) {
+          status = PLAYER_TURN;
+        } else {
+          status = PLAYER_WAIT;
+        }
+        break;
       }
       }
       /* server down */

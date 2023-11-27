@@ -25,7 +25,7 @@ typedef struct {
 
 GameState *newGame();
 
-void renderGame(GameState *game);
+void renderGame(const GameState *game);
 
 bool makeMove(int n, GameState *game);
 

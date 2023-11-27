@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#include "client.h"
-#include "protocol.h"
-#include "server.h"
+#include "../include/client.h"
+#include "../include/protocol.h"
+#include "../include/server.h"
+#include "../include/Awale.h"
 
 static void init(void) {
 #ifdef WIN32
@@ -25,6 +27,7 @@ static void end(void) {
 }
 
 static void appServer(void) {
+  srand(time(NULL));   // Initialization, should only be called once.
   SOCKET sock = init_connection_server();
   char buffer[BUF_SIZE];
   /* the index for the array */
@@ -114,7 +117,7 @@ static void appServer(void) {
                   request[0] = CONFIRM_CHALLENGE;
                   memcpy(request + 1, clients[i].name, strlen(clients[i].name));
                   request[1 + strlen(clients[i].name)] = 0;
-                  write_client(clients[j].sock, request);
+                  write_string(clients[j].sock, request);
                 }
               }
               break;
@@ -129,9 +132,26 @@ static void appServer(void) {
                   request[0] = CHALLENGE_ACCEPTED;
                   memcpy(request + 1, clients[i].name, strlen(clients[i].name));
                   request[1 + strlen(clients[i].name)] = 0;
-                  write_client(clients[j].sock, request);
+                  write_string(clients[j].sock, request);
+                  GameState* game = newGame();
+                  clients[i].game = clients[j].game = game;
+                  int turn = rand();
+                  clients[i].turn = turn;
+                  clients[j].turn = 1 - turn;
+                  // Write the game to both players
+                  write_game(&clients[i]);
+                  write_game(&clients[j]);
+                  clients[i].opponent = &clients[j];
+                  clients[j].opponent = &clients[i];
                 }
               }
+              break;
+            }
+            case MOVE_DATA : {
+              makeMove(buffer[1], clients[i].game);
+              write_game(&clients[i]);
+              write_game(clients[i].opponent);
+              break;
             }
               // send_message_to_all_clients(clients, client, actual, buffer,
               // 0);
@@ -176,7 +196,7 @@ static void send_message_to_all_clients(Client *clients, Client sender,
         strncat(message, " : ", sizeof message - strlen(message) - 1);
       }
       strncat(message, buffer, sizeof message - strlen(message) - 1);
-      write_client(clients[i].sock, message);
+      write_string(clients[i].sock, message);
     }
   }
 }
@@ -223,11 +243,32 @@ static int read_client(SOCKET sock, char *buffer) {
   return n;
 }
 
-static void write_client(SOCKET sock, const char *buffer) {
-  if (send(sock, buffer, strlen(buffer), 0) < 0) {
+static void write_client(SOCKET sock, const char *buffer, unsigned int size) {
+  if (send(sock, buffer, size, 0) < 0) {
     perror("send()");
     exit(errno);
   }
+}
+
+static void write_string(SOCKET sock, const char *buffer) {
+  write_client(sock, buffer, strlen(buffer));
+}
+
+static void write_game(Client* client) {
+  renderGame(client->game);
+  char *buffer = malloc((2 + PLAYERS + BOARD_SIZE) * sizeof(char));
+  buffer[0] = GAME_DATA;
+  buffer[1] = (client->game->turn + client->turn) % 2;
+  for(int i = 0; i < PLAYERS; i++) {
+    buffer[2 + i] = client->game->scores[i];
+  }
+  for(int i = 0; i < BOARD_SIZE; i++) {
+    buffer[2 + PLAYERS + i] = client->game->board[i];
+  }
+
+  write_client(client->sock, buffer, 2 + PLAYERS + BOARD_SIZE);
+
+  free(buffer);
 }
 
 int main(int argc, char **argv) {

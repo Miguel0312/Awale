@@ -18,7 +18,7 @@ GameState* newGame() {
   return game;
 }
 
-void renderGame(GameState* game) {
+void renderGame(const GameState* game) {
   for(int i = 0; i < ROW_COUNT; i++) {
     printf("|");
     for(int j = 0; j < COLUMN_COUNT; j++) {

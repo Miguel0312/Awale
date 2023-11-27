@@ -9,4 +9,8 @@
 #define PLAYER_NOT_FOUND 8
 #define PLAYER_NOT_AVAILABLE 9
 
+// TODO: Add success move and failed move codes
+#define GAME_DATA 10
+#define MOVE_DATA 11
+
 #endif

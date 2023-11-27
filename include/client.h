@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <unistd.h> /* close */
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
@@ -31,6 +32,11 @@ typedef struct in_addr IN_ADDR;
 #define PORT 1984
 
 #define BUF_SIZE 1024
+
+#define MENU_NOT_SHOWN 0
+#define MENU_SHOWN 1
+#define PLAYER_TURN 2
+#define PLAYER_WAIT 3
 
 static void init(void);
 static void end(void);
