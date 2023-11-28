@@ -52,4 +52,6 @@ Mkfile.old
 dkms.conf
 
 .vscode/**
-src/Awale
+src/client
+src/server
+src/*.txt
