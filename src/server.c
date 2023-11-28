@@ -153,7 +153,17 @@ static void appServer(void) {
               if(moveResult){
                 write_game(clients[i].opponent, moveResult, buffer[1]);
               }
+              if(hasEnded(clients[i].game)) {
+                buffer[0] = END_GAME;
+                write_client(clients[i].sock, buffer, 1);
+                write_client(clients[i].opponent->sock, buffer, 1);
+                free(clients[i].game);
+                clients[i].game = clients[i].opponent->game = NULL;
+                clients[i].opponent->opponent = NULL;
+                clients[i].opponent = NULL;
+              }
               break;
+            }
             case LIST_ONLINE_PLAYERS: {
               int total_len = 0;
               for (int j = 0; j < actual; j++) {
@@ -174,15 +184,14 @@ static void appServer(void) {
               // send_message_to_all_clients(clients, client, actual, buffer,
               // 0);
             } break;
-            }
           }
         }
       }
     }
-
-    clear_clients(clients, actual);
-    end_connection(sock);
   }
+
+  clear_clients(clients, actual);
+  end_connection(sock);
 }
 
 static void clear_clients(Client *clients, int actual) {

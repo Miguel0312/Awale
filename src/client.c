@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "../include/client.h"
 #include "../include/protocol.h"
@@ -89,7 +90,8 @@ static void appClient(const char *address, const char *name) {
         switch (option) {
           case '1': {
             printf("Enter the player name: ");
-            fgets(buffer, BUF_SIZE, stdin);
+            scanf("%s", buf);
+            //printf("%s", buf);
             challenge_request(sock, buf);
             break;
           }
@@ -172,6 +174,27 @@ static void appClient(const char *address, const char *name) {
           printf("Wait for your opponent to play.\n");
           status = PLAYER_WAIT;
         }
+        break;
+      }
+      case END_GAME: {
+        if(game->scores[0] > game->scores[1]) {
+          printf("Congratulation! You won!\n");
+        } else if(game->scores[0] < game->scores[1]) {
+          printf("You lost!\n");
+        } else {
+          printf("It is a tie!\n");
+        }
+        printf("Do you want to save the replay?(y/n) ");
+        char ans;
+        scanf("%c", &ans);
+        if(tolower(ans) == 'y') {
+          printf("Enter the name of the file to ssve the game: ");
+          scanf("%s", buffer);
+          saveGame(buffer, game);
+        }
+        free(game);
+        game = NULL;
+        status = MENU_NOT_SHOWN;
         break;
       }
       case ONLINE_PLAYERS_RESPONSE: {

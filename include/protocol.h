@@ -17,4 +17,6 @@
 #define MOVE_SUCCESS 12
 #define MOVE_FAIL 13
 
+#define END_GAME 14
+
 #endif

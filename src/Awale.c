@@ -54,7 +54,7 @@ int prev(int index) {
 }
 
 int makeMove(int n, GameState* game) {
-  if(game->board[n] && 
+  if(!game->board[n] ||
     (n < game->turn * COLUMN_COUNT || n >= (game->turn + 1) * COLUMN_COUNT)) {
     return 0;
   }
@@ -69,11 +69,38 @@ int makeMove(int n, GameState* game) {
     }
     game->board[cur] += 1;
   }
+
+  int grandSlam = false;
+  if((cur == 0 && game->turn == 1) || (cur == 11 && game->turn == 0)) {
+    grandSlam = true;
+    for(int i = COLUMN_COUNT * (1 - game->turn); i < COLUMN_COUNT * (2 - game->turn); i++){
+      if(game->board[i] != 2 && game->board[i] != 3) {
+        grandSlam = false;
+        break;
+      }
+    }
+  }
   
-  while(cur/6 != n/6 && (game->board[cur] == 2 || game->board[cur] == 3)) {
-    game->scores[game->turn] += game->board[cur];
-    game->board[cur] = 0;
-    cur = prev(cur);
+  if(!grandSlam) {
+    while(cur/6 != n/6 && (game->board[cur] == 2 || game->board[cur] == 3)) {
+      game->scores[game->turn] += game->board[cur];
+      game->board[cur] = 0;
+      cur = prev(cur);
+    }
+  }
+
+  int sum0 = 0, sum1 = 0;
+  for(int i = 0; i < COLUMN_COUNT; i++) {
+    sum0 += game->board[i];
+    sum1 += game->board[COLUMN_COUNT + i];
+  }
+
+  if(sum0 == 0 || sum1 == 0) {
+    game->scores[0] += sum0;
+    game->scores[1] += sum1;
+    for(int i = 0; i < BOARD_SIZE; i++) {
+      game->board[i] = 0;
+    }
   }
 
   game->turn = 1 - game->turn;
