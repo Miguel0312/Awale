@@ -4,10 +4,10 @@
 #include <string.h>
 #include <time.h>
 
+#include "../include/Awale.h"
 #include "../include/client.h"
 #include "../include/protocol.h"
 #include "../include/server.h"
-#include "../include/Awale.h"
 
 static void init(void) {
 #ifdef WIN32
@@ -27,7 +27,7 @@ static void end(void) {
 }
 
 static void appServer(void) {
-  srand(time(NULL));   // Initialization, should only be called once.
+  srand(time(NULL)); // Initialization, should only be called once.
   SOCKET sock = init_connection_server();
   char buffer[BUF_SIZE];
   /* the index for the array */
@@ -133,7 +133,7 @@ static void appServer(void) {
                   memcpy(request + 1, clients[i].name, strlen(clients[i].name));
                   request[1 + strlen(clients[i].name)] = 0;
                   write_string(clients[j].sock, request);
-                  GameState* game = newGame();
+                  GameState *game = newGame();
                   clients[i].game = clients[j].game = game;
                   int turn = rand();
                   clients[i].turn = turn;
@@ -147,24 +147,40 @@ static void appServer(void) {
               }
               break;
             }
-            case MOVE_DATA : {
+            case MOVE_DATA: {
               makeMove(buffer[1], clients[i].game);
               write_game(&clients[i]);
               write_game(clients[i].opponent);
               break;
+            case LIST_ONLINE_PLAYERS: {
+              int total_len = 0;
+              for (int j = 0; j < actual; j++) {
+                total_len += strlen(clients[j].name);
+              }
+              int packet_size = 2 + actual + total_len;
+              char *request = (char *)malloc(packet_size);
+              request[0] = ONLINE_PLAYERS_RESPONSE;
+              request[1] = (char)actual;
+              int pos = 2;
+              for (int j = 0; j < actual; j++) {
+                memcpy(&request[pos], clients[j].name, strlen(clients[j].name));
+                pos += strlen(clients[j].name);
+                request[pos++] = 0;
+              }
+              write_client(clients[i].sock, request, packet_size);
             }
               // send_message_to_all_clients(clients, client, actual, buffer,
               // 0);
+            } break;
             }
-            break;
           }
         }
       }
     }
-  }
 
-  clear_clients(clients, actual);
-  end_connection(sock);
+    clear_clients(clients, actual);
+    end_connection(sock);
+  }
 }
 
 static void clear_clients(Client *clients, int actual) {
@@ -254,15 +270,15 @@ static void write_string(SOCKET sock, const char *buffer) {
   write_client(sock, buffer, strlen(buffer));
 }
 
-static void write_game(Client* client) {
+static void write_game(Client *client) {
   renderGame(client->game);
   char *buffer = malloc((2 + PLAYERS + BOARD_SIZE) * sizeof(char));
   buffer[0] = GAME_DATA;
   buffer[1] = (client->game->turn + client->turn) % 2;
-  for(int i = 0; i < PLAYERS; i++) {
+  for (int i = 0; i < PLAYERS; i++) {
     buffer[2 + i] = client->game->scores[i];
   }
-  for(int i = 0; i < BOARD_SIZE; i++) {
+  for (int i = 0; i < BOARD_SIZE; i++) {
     buffer[2 + PLAYERS + i] = client->game->board[i];
   }
 
@@ -270,6 +286,12 @@ static void write_game(Client* client) {
 
   free(buffer);
 }
+/*static void write_client(SOCKET sock, const char *buffer) {
+  if (send(sock, buffer, strlen(buffer), 0) < 0) {
+    perror("send()");
+    exit(errno);
+  }
+}*/
 
 int main(int argc, char **argv) {
   init();

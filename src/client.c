@@ -41,7 +41,7 @@ static void show_start_menu() {
 static void appClient(const char *address, const char *name) {
   SOCKET sock = init_connection_client(address);
   char buffer[BUF_SIZE];
-  GameState* game = newGame();
+  GameState *game = newGame();
   int status = MENU_NOT_SHOWN;
 
   fd_set rdfs;
@@ -50,7 +50,7 @@ static void appClient(const char *address, const char *name) {
   write_server(sock, name);
 
   while (1) {
-    if(status == MENU_NOT_SHOWN) {
+    if (status == MENU_NOT_SHOWN) {
       show_start_menu();
       status = MENU_SHOWN;
     }
@@ -69,7 +69,7 @@ static void appClient(const char *address, const char *name) {
 
     /* something from standard input : i.e keyboard */
     if (FD_ISSET(STDIN_FILENO, &rdfs)) {
-      if(fgets(buffer, BUF_SIZE - 1, stdin) == NULL || buffer[0] == '\n') {
+      if (fgets(buffer, BUF_SIZE - 1, stdin) == NULL || buffer[0] == '\n') {
         continue;
       }
       char *p = NULL;
@@ -80,29 +80,35 @@ static void appClient(const char *address, const char *name) {
         /* fclean */
         buffer[BUF_SIZE - 1] = 0;
       }
-      if(status == MENU_SHOWN) {
+      if (status == MENU_SHOWN) {
         char option = buffer[0];
         switch (option) {
-          case '1': {
-            printf("Enter the player name: ");
-            char buf[MAX_USERNAME_SIZE];
-            scanf("%s", buf);
-            challenge_request(sock, buf);
-            break;
-          }
+        case '1': {
+          printf("Enter the player name: ");
+          char buf[MAX_USERNAME_SIZE];
+          scanf("%s", buf);
+          challenge_request(sock, buf);
+          break;
         }
-      } else if(status == PLAYER_TURN) {
+        case '2': {
+          char buf[] = {LIST_ONLINE_PLAYERS, 0};
+          write_server(sock, buf);
+          break;
+        }
+        }
+      } else if (status == PLAYER_TURN) {
         buffer[1] = atoi(buffer) - 1;
-        if(buffer[1] < 0 || buffer[1] >= 12) {
+        if (buffer[1] < 0 || buffer[1] >= 12) {
           printf("Invalid value %d. Try again.\n", (int)buffer[1] + 1);
           continue;
         }
-        buffer[0] = MOVE_DATA; 
+        buffer[0] = MOVE_DATA;
         write_server(sock, buffer);
-      } else if(status == PLAYER_WAIT) {
+      } else if (status == PLAYER_WAIT) {
         printf("It is not your turn. You must wait.\n");
         continue;
       }
+
     } else if (FD_ISSET(sock, &rdfs)) {
       int n = read_server(sock, buffer);
       char request_type = buffer[0];
@@ -133,19 +139,28 @@ static void appClient(const char *address, const char *name) {
       // TODO: Write to the user if he plays first or second
       case GAME_DATA: {
         game->turn = buffer[1];
-        for(int i = 0; i < PLAYERS; i++) {
+        for (int i = 0; i < PLAYERS; i++) {
           game->scores[i] = buffer[2 + i];
         }
-        for(int i = 0; i < BOARD_SIZE; i++) {
+        for (int i = 0; i < BOARD_SIZE; i++) {
           game->board[i] = buffer[2 + PLAYERS + i];
         }
         renderGame(game);
-        if(game->turn == 0) {
+        if (game->turn == 0) {
           status = PLAYER_TURN;
         } else {
           status = PLAYER_WAIT;
         }
         break;
+      }
+      case ONLINE_PLAYERS_RESPONSE: {
+        int client_number = buffer[1];
+        int pos = 2;
+        printf("Online players\n");
+        for (int i = 0; i < client_number; i++) {
+          printf("%s\n", &buffer[pos]);
+          pos += strlen(&buffer[pos]) + 1;
+        }
       }
       }
       /* server down */
@@ -153,7 +168,6 @@ static void appClient(const char *address, const char *name) {
         printf("Server disconnected !\n");
         break;
       }
-      puts(buffer);
     }
   }
 
