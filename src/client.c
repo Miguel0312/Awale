@@ -176,6 +176,11 @@ static void appClient(const char *address, const char *name) {
         }
         break;
       }
+      case OPPONENT_DISCONNECTED: {
+        game->scores[0] = 100;
+        printf("Your opponent disconnected\n");
+        getchar();
+      }
       case END_GAME: {
         if(game->scores[0] > game->scores[1]) {
           printf("Congratulation! You won!\n");
@@ -188,7 +193,7 @@ static void appClient(const char *address, const char *name) {
         char ans;
         scanf("%c", &ans);
         if(tolower(ans) == 'y') {
-          printf("Enter the name of the file to ssve the game: ");
+          printf("Enter the name of the file to save the game: ");
           scanf("%s", buffer);
           saveGame(buffer, game);
         }

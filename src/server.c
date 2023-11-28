@@ -34,7 +34,7 @@ static void appServer(void) {
   int actual = 0;
   int max = sock;
   /* an array for all clients */
-  Client clients[MAX_CLIENTS];
+  Client clients[MAX_CLIENTS] = {0};
 
   fd_set rdfs;
 
@@ -101,10 +101,19 @@ static void appServer(void) {
           /* client disconnected */
           if (c == 0) {
             closesocket(clients[i].sock);
+            if(clients[i].opponent != NULL) {
+              buffer[0] = OPPONENT_DISCONNECTED;
+              write_client(clients[i].opponent->sock, buffer, 1);
+              clients[i].opponent->opponent = NULL;
+              clients[i].opponent->game = NULL;
+              clients[i].opponent = NULL;
+              free(clients[i].game);
+              clients[i].game = NULL;
+            }
             remove_client(clients, i, &actual);
             strncpy(buffer, client.name, BUF_SIZE - 1);
             strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
-            send_message_to_all_clients(clients, client, actual, buffer, 1);
+            //send_message_to_all_clients(clients, client, actual, buffer, 1);
           } else {
             char request_type = buffer[0];
             switch (request_type) {
