@@ -53,10 +53,10 @@ int prev(int index) {
   }
 }
 
-bool makeMove(int n, GameState* game) {
+int makeMove(int n, GameState* game) {
   if(game->board[n] && 
     (n < game->turn * COLUMN_COUNT || n >= (game->turn + 1) * COLUMN_COUNT)) {
-    return false;
+    return 0;
   }
 
   int cnt = game->board[n];
@@ -84,7 +84,7 @@ bool makeMove(int n, GameState* game) {
     game->replay.cur = addNext(game->replay.cur, n);
   }
 
-  return true;
+  return 1;
 }
 
 bool hasEnded(GameState* game) {

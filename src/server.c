@@ -139,18 +139,20 @@ static void appServer(void) {
                   clients[i].turn = turn;
                   clients[j].turn = 1 - turn;
                   // Write the game to both players
-                  write_game(&clients[i]);
-                  write_game(&clients[j]);
+                  write_game(&clients[i], -1, -1);
+                  write_game(&clients[j], -1, -1);
                   clients[i].opponent = &clients[j];
                   clients[j].opponent = &clients[i];
                 }
               }
               break;
             }
-            case MOVE_DATA: {
-              makeMove(buffer[1], clients[i].game);
-              write_game(&clients[i]);
-              write_game(clients[i].opponent);
+            case MOVE_DATA : {
+              int moveResult = makeMove(buffer[1], clients[i].game);
+              write_game(&clients[i], moveResult, buffer[1]);
+              if(moveResult){
+                write_game(clients[i].opponent, moveResult, buffer[1]);
+              }
               break;
             case LIST_ONLINE_PLAYERS: {
               int total_len = 0;
@@ -270,10 +272,22 @@ static void write_string(SOCKET sock, const char *buffer) {
   write_client(sock, buffer, strlen(buffer));
 }
 
-static void write_game(Client *client) {
+static void write_game(Client* client, int moveResult, int move) {
   renderGame(client->game);
-  char *buffer = malloc((2 + PLAYERS + BOARD_SIZE) * sizeof(char));
-  buffer[0] = GAME_DATA;
+  char *buffer = malloc((3 + PLAYERS + BOARD_SIZE) * sizeof(char));
+  switch(moveResult) {
+    case -1: {
+      buffer[0] = GAME_DATA; 
+      break;
+    }
+    case 0: {
+      buffer[0] = MOVE_FAIL; 
+      break;
+    } case 1: {
+      buffer[0] = MOVE_SUCCESS;
+      break;
+    }
+  }
   buffer[1] = (client->game->turn + client->turn) % 2;
   for (int i = 0; i < PLAYERS; i++) {
     buffer[2 + i] = client->game->scores[i];
@@ -281,8 +295,9 @@ static void write_game(Client *client) {
   for (int i = 0; i < BOARD_SIZE; i++) {
     buffer[2 + PLAYERS + i] = client->game->board[i];
   }
+  buffer[2+PLAYERS+BOARD_SIZE] = move;
 
-  write_client(client->sock, buffer, 2 + PLAYERS + BOARD_SIZE);
+  write_client(client->sock, buffer, 3 + PLAYERS + BOARD_SIZE);
 
   free(buffer);
 }

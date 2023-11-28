@@ -32,10 +32,13 @@ static void challenge_request(SOCKET socket, const char *buf) {
   write_server(socket, request);
 }
 
+// TODO: end game state in both the server and client
+
 static void show_start_menu() {
   printf("Select an option:\n");
   printf("1 - Challenge a player.\n");
   printf("2 - List online players.\n");
+  printf("4 - Watch replay\n");
 }
 
 static void appClient(const char *address, const char *name) {
@@ -82,19 +85,22 @@ static void appClient(const char *address, const char *name) {
       }
       if (status == MENU_SHOWN) {
         char option = buffer[0];
+        char buf[BUF_SIZE];
         switch (option) {
-        case '1': {
-          printf("Enter the player name: ");
-          char buf[MAX_USERNAME_SIZE];
-          scanf("%s", buf);
-          challenge_request(sock, buf);
-          break;
-        }
-        case '2': {
-          char buf[] = {LIST_ONLINE_PLAYERS, 0};
-          write_server(sock, buf);
-          break;
-        }
+          case '1': {
+            printf("Enter the player name: ");
+            fgets(buffer, BUF_SIZE, stdin);
+            challenge_request(sock, buf);
+            break;
+          }
+          case '4': {
+            printf("Enter name of the replay file: ");
+            scanf("%s", buf);
+            getchar();
+            replayGame(buf);
+            status = MENU_NOT_SHOWN;
+            break;
+          }
         }
       } else if (status == PLAYER_TURN) {
         buffer[1] = atoi(buffer) - 1;
@@ -136,7 +142,20 @@ static void appClient(const char *address, const char *name) {
         status = PLAYER_TURN;
         break;
       }
-      // TODO: Write to the user if he plays first or second
+      case MOVE_FAIL: {
+        printf("Invalid move\n");
+      }
+      case MOVE_SUCCESS: {
+        if(request_type == MOVE_SUCCESS) {
+          int move = buffer[2 + PLAYERS + BOARD_SIZE];
+          if(game->replay.root == NULL) {
+            game->replay.root = game->replay.cur = newList(move);
+          } else {
+            game->replay.cur = addNext(game->replay.cur, move);
+          }
+        }
+        saveGame("myGame.txt", game);
+      }
       case GAME_DATA: {
         game->turn = buffer[1];
         for (int i = 0; i < PLAYERS; i++) {
@@ -148,7 +167,9 @@ static void appClient(const char *address, const char *name) {
         renderGame(game);
         if (game->turn == 0) {
           status = PLAYER_TURN;
+          printf("It is your turn.\n");
         } else {
+          printf("Wait for your opponent to play.\n");
           status = PLAYER_WAIT;
         }
         break;

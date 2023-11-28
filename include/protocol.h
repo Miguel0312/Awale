@@ -14,5 +14,7 @@
 // TODO: Add success move and failed move codes
 #define GAME_DATA 10
 #define MOVE_DATA 11
+#define MOVE_SUCCESS 12
+#define MOVE_FAIL 13
 
 #endif
