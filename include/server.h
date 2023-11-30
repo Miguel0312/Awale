@@ -43,6 +43,7 @@ typedef struct Client {
   GameState *game;
   int turn;
   struct Client *opponent;
+  struct Client *chat;
 } Client;
 
 static void init(void);

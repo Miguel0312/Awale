@@ -32,10 +32,19 @@ static void challenge_request(SOCKET socket, const char *buf) {
   write_server(socket, request);
 }
 
+static void chat_request(SOCKET socket, const char *buf) {
+  char request[MAX_USERNAME_SIZE + 1];
+  request[0] = CHAT_REQUEST;
+  memcpy(request + 1, buf, strlen(buf));
+  request[1 + strlen(buf)] = 0;
+  write_server(socket, request);
+}
+
 static void show_start_menu() {
   printf("Select an option:\n");
   printf("1 - Challenge a player.\n");
   printf("2 - List online players.\n");
+  printf("3 - Start chat.\n");
 }
 
 static void appClient(const char *address, const char *name) {
@@ -95,7 +104,23 @@ static void appClient(const char *address, const char *name) {
           write_server(sock, buf);
           break;
         }
+        case '3': {
+          printf("Enter the player to contact:");
+          char buf[MAX_USERNAME_SIZE];
+          scanf("%s", buf);
+          chat_request(sock, buf);
         }
+        }
+      } else if ((status == PLAYER_TURN || status == PLAYER_WAIT) &&
+                 atoi(buffer) == 0) {
+        printf("Sending chat message\n");
+        char *request = (char *)malloc(2 + strlen(buffer));
+        request[0] = CHAT_MESSAGE;
+        memcpy(&request[1], buffer, strlen(buffer));
+        request[1 + strlen(buffer)] = 0;
+        write_server(sock, request);
+        free(request);
+
       } else if (status == PLAYER_TURN) {
         buffer[1] = atoi(buffer) - 1;
         if (buffer[1] < 0 || buffer[1] >= 12) {
@@ -107,6 +132,14 @@ static void appClient(const char *address, const char *name) {
       } else if (status == PLAYER_WAIT) {
         printf("It is not your turn. You must wait.\n");
         continue;
+      } else if (status == CHAT_MODE) {
+        printf("Sending chat message\n");
+        char *request = (char *)malloc(2 + strlen(buffer));
+        request[0] = CHAT_MESSAGE;
+        memcpy(&request[1], buffer, strlen(buffer));
+        request[1 + strlen(buffer)] = 0;
+        write_server(sock, request);
+        free(request);
       }
 
     } else if (FD_ISSET(sock, &rdfs)) {
@@ -127,6 +160,15 @@ static void appClient(const char *address, const char *name) {
           response[1 + strlen(challenger)] = 0;
           write_server(sock, response);
           status = PLAYER_TURN;
+          free(response);
+        } else {
+          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+          response[0] = CHALLENGE_REFUSED;
+          memcpy(response + 1, challenger, strlen(challenger));
+          response[1 + strlen(challenger)] = 0;
+          write_server(sock, response);
+          status = MENU_NOT_SHOWN;
+          free(response);
         }
         break;
       }
@@ -134,6 +176,12 @@ static void appClient(const char *address, const char *name) {
         char *challengee = &buffer[1];
         printf("Challenge to %s accepted\n", challengee);
         status = PLAYER_TURN;
+        break;
+      }
+      case CHALLENGE_REFUSED: {
+        char *challengee = &buffer[1];
+        printf("Challenge to %s refused\n", challengee);
+        status = MENU_NOT_SHOWN;
         break;
       }
       // TODO: Write to the user if he plays first or second
@@ -161,6 +209,45 @@ static void appClient(const char *address, const char *name) {
           printf("%s\n", &buffer[pos]);
           pos += strlen(&buffer[pos]) + 1;
         }
+        break;
+      }
+      case CONFIRM_CHAT: {
+        printf("Player %s want to chat to you. Do you accept(y/n)?",
+               &buffer[1]);
+        char accept;
+        scanf("%c", &accept);
+        if (accept == 'y') {
+          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+          response[0] = CHAT_ACCEPTED;
+          memcpy(&response[1], &buffer[1], strlen(&buffer[1]));
+          response[1 + strlen(&buffer[1])] = 0;
+          write_server(sock, response);
+          status = CHAT_MODE;
+          free(response);
+        } else {
+          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+          response[0] = CHAT_REFUSED;
+          memcpy(&response[1], &buffer[1], strlen(&buffer[1]));
+          response[1 + strlen(&buffer[1])] = 0;
+          write_server(sock, response);
+          status = MENU_NOT_SHOWN;
+          free(response);
+        }
+        break;
+      }
+      case CHAT_ACCEPTED: {
+        printf("Chat accepted.\n");
+        status = CHAT_MODE;
+        break;
+      }
+      case CHAT_REFUSED: {
+        printf("Chat refused.\n");
+        status = MENU_NOT_SHOWN;
+        break;
+      }
+      case CHAT_MESSAGE: {
+        printf("%s\n", &buffer[1]);
+        break;
       }
       }
       /* server down */

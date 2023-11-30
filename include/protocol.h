@@ -7,6 +7,7 @@
 
 #define ONLINE_PLAYERS_RESPONSE 5
 
+#define CHALLENGE_REFUSED 6
 #define CHALLENGE_ACCEPTED 7
 #define PLAYER_NOT_FOUND 8
 #define PLAYER_NOT_AVAILABLE 9
@@ -14,5 +15,11 @@
 // TODO: Add success move and failed move codes
 #define GAME_DATA 10
 #define MOVE_DATA 11
+
+#define CHAT_REQUEST 15
+#define CONFIRM_CHAT 16
+#define CHAT_ACCEPTED 17
+#define CHAT_REFUSED 18
+#define CHAT_MESSAGE 19
 
 #endif
