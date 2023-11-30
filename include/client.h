@@ -10,9 +10,9 @@
 #include <arpa/inet.h>
 #include <netdb.h> /* gethostbyname */
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/select.h>
 #include <unistd.h> /* close */
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
@@ -37,6 +37,7 @@ typedef struct in_addr IN_ADDR;
 #define MENU_SHOWN 1
 #define PLAYER_TURN 2
 #define PLAYER_WAIT 3
+#define CHAT_MODE 4
 
 static void init(void);
 static void end(void);

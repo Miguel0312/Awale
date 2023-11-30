@@ -101,7 +101,7 @@ static void appServer(void) {
           /* client disconnected */
           if (c == 0) {
             closesocket(clients[i].sock);
-            if(clients[i].opponent != NULL) {
+            if (clients[i].opponent != NULL) {
               buffer[0] = OPPONENT_DISCONNECTED;
               write_client(clients[i].opponent->sock, buffer, 1);
               clients[i].opponent->opponent = NULL;
@@ -113,7 +113,7 @@ static void appServer(void) {
             remove_client(clients, i, &actual);
             strncpy(buffer, client.name, BUF_SIZE - 1);
             strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
-            //send_message_to_all_clients(clients, client, actual, buffer, 1);
+            // send_message_to_all_clients(clients, client, actual, buffer, 1);
           } else {
             char request_type = buffer[0];
             switch (request_type) {
@@ -127,6 +127,7 @@ static void appServer(void) {
                   memcpy(request + 1, clients[i].name, strlen(clients[i].name));
                   request[1 + strlen(clients[i].name)] = 0;
                   write_string(clients[j].sock, request);
+                  free(request);
                 }
               }
               break;
@@ -144,7 +145,7 @@ static void appServer(void) {
                   write_string(clients[j].sock, request);
                   GameState *game = newGame();
                   clients[i].game = clients[j].game = game;
-                  int turn = rand();
+                  int turn = rand() % 2;
                   clients[i].turn = turn;
                   clients[j].turn = 1 - turn;
                   // Write the game to both players
@@ -152,17 +153,35 @@ static void appServer(void) {
                   write_game(&clients[j], -1, -1);
                   clients[i].opponent = &clients[j];
                   clients[j].opponent = &clients[i];
+                  clients[i].chat = &clients[j];
+                  clients[j].chat = &clients[i];
+                  free(request);
                 }
               }
               break;
             }
-            case MOVE_DATA : {
+            case CHALLENGE_REFUSED: {
+              printf("Challenge to %s refused\n", &buffer[1]);
+              int j;
+              for (j = 0; j < actual; j++) {
+                if (strcmp(clients[j].name, &buffer[1]) == 0) {
+                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+                  request[0] = CHALLENGE_REFUSED;
+                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
+                  request[1 + strlen(clients[i].name)] = 0;
+                  write_string(clients[j].sock, request);
+                  free(request);
+                }
+              }
+              break;
+            }
+            case MOVE_DATA: {
               int moveResult = makeMove(buffer[1], clients[i].game);
               write_game(&clients[i], moveResult, buffer[1]);
-              if(moveResult){
+              if (moveResult) {
                 write_game(clients[i].opponent, moveResult, buffer[1]);
               }
-              if(hasEnded(clients[i].game)) {
+              if (hasEnded(clients[i].game)) {
                 buffer[0] = END_GAME;
                 write_client(clients[i].sock, buffer, 1);
                 write_client(clients[i].opponent->sock, buffer, 1);
@@ -189,16 +208,81 @@ static void appServer(void) {
                 request[pos++] = 0;
               }
               write_client(clients[i].sock, request, packet_size);
+              free(request);
+              break;
+            }
+            case CHAT_REQUEST: {
+              printf("Player to chat: %s\n", &buffer[1]);
+              int j;
+              for (j = 0; j < actual; j++) {
+                if (strcmp(clients[j].name, &buffer[1]) == 0) {
+                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+                  request[0] = CONFIRM_CHAT;
+                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
+                  request[1 + strlen(clients[i].name)] = 0;
+                  write_string(clients[j].sock, request);
+                  free(request);
+                }
+                // send_message_to_all_clients(clients, client, actual, buffer,
+                // 0);
+              }
+              break;
+            }
+            case CHAT_ACCEPTED: {
+              printf("Chat with %s accepted\n", &buffer[1]);
+              int j;
+              for (j = 0; j < actual; j++) {
+                if (strcmp(clients[j].name, &buffer[1]) == 0) {
+                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+                  request[0] = CHAT_ACCEPTED;
+                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
+                  request[1 + strlen(clients[i].name)] = 0;
+                  write_string(clients[j].sock, request);
+                  clients[i].chat = &clients[j];
+                  clients[j].chat = &clients[i];
+                  free(request);
+                }
+              }
+              break;
+            }
+            case CHAT_REFUSED: {
+              printf("Chat with %s refused\n", &buffer[1]);
+              int j;
+              for (j = 0; j < actual; j++) {
+                if (strcmp(clients[j].name, &buffer[1]) == 0) {
+                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+                  request[0] = CHAT_REFUSED;
+                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
+                  request[1 + strlen(clients[i].name)] = 0;
+                  write_string(clients[j].sock, request);
+                  free(request);
+                }
+              }
+              break;
+            }
+            case CHAT_MESSAGE: {
+              char *response = (char *)malloc(4 + strlen(clients[i].name) +
+                                              strlen(&buffer[1]));
+              response[0] = CHAT_MESSAGE;
+              memcpy(response + 1, clients[i].name, strlen(clients[i].name));
+              int pos = 1 + strlen(clients[i].name);
+              response[pos++] = ':';
+              response[pos++] = ' ';
+              memcpy(&response[pos], buffer, strlen(buffer));
+              pos += strlen(buffer);
+              response[pos] = 0;
+              write_string(clients[i].chat->sock, response);
+              free(response);
+              break;
             }
               // send_message_to_all_clients(clients, client, actual, buffer,
               // 0);
-            } break;
+            }
           }
         }
       }
     }
   }
-
   clear_clients(clients, actual);
   end_connection(sock);
 }
@@ -290,21 +374,22 @@ static void write_string(SOCKET sock, const char *buffer) {
   write_client(sock, buffer, strlen(buffer));
 }
 
-static void write_game(Client* client, int moveResult, int move) {
+static void write_game(Client *client, int moveResult, int move) {
   renderGame(client->game);
   char *buffer = malloc((3 + PLAYERS + BOARD_SIZE) * sizeof(char));
-  switch(moveResult) {
-    case -1: {
-      buffer[0] = GAME_DATA; 
-      break;
-    }
-    case 0: {
-      buffer[0] = MOVE_FAIL; 
-      break;
-    } case 1: {
-      buffer[0] = MOVE_SUCCESS;
-      break;
-    }
+  switch (moveResult) {
+  case -1: {
+    buffer[0] = GAME_DATA;
+    break;
+  }
+  case 0: {
+    buffer[0] = MOVE_FAIL;
+    break;
+  }
+  case 1: {
+    buffer[0] = MOVE_SUCCESS;
+    break;
+  }
   }
   buffer[1] = (client->game->turn + client->turn) % 2;
   for (int i = 0; i < PLAYERS; i++) {
@@ -313,7 +398,7 @@ static void write_game(Client* client, int moveResult, int move) {
   for (int i = 0; i < BOARD_SIZE; i++) {
     buffer[2 + PLAYERS + i] = client->game->board[i];
   }
-  buffer[2+PLAYERS+BOARD_SIZE] = move;
+  buffer[2 + PLAYERS + BOARD_SIZE] = move;
 
   write_client(client->sock, buffer, 3 + PLAYERS + BOARD_SIZE);
 
