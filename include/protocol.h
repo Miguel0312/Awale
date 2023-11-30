@@ -20,10 +20,11 @@
 #define END_GAME 14
 #define OPPONENT_DISCONNECTED 15
 
-#define CHAT_REQUEST 15
-#define CONFIRM_CHAT 16
-#define CHAT_ACCEPTED 17
-#define CHAT_REFUSED 18
-#define CHAT_MESSAGE 19
+#define CHAT_REQUEST 16
+#define CONFIRM_CHAT 17
+#define CHAT_ACCEPTED 18
+#define CHAT_REFUSED 19
+#define CHAT_MESSAGE 20
+#define END_CHAT 21
 
 #endif

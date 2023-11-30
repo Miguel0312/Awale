@@ -26,6 +26,17 @@ static void end(void) {
 #endif
 }
 
+static void free_client(Client *client) {
+  closesocket(client->sock);
+  if (client->opponent != NULL) {
+    client->opponent->opponent = NULL;
+    client->opponent->game = NULL;
+    client->opponent = NULL;
+    free(client->game);
+    client->game = NULL;
+  }
+}
+
 static void appServer(void) {
   srand(time(NULL)); // Initialization, should only be called once.
   SOCKET sock = init_connection_server();
@@ -100,128 +111,55 @@ static void appServer(void) {
           int c = read_client(clients[i].sock, buffer);
           /* client disconnected */
           if (c == 0) {
-            closesocket(clients[i].sock);
-            if (clients[i].opponent != NULL) {
-              buffer[0] = OPPONENT_DISCONNECTED;
-              write_client(clients[i].opponent->sock, buffer, 1);
-              clients[i].opponent->opponent = NULL;
-              clients[i].opponent->game = NULL;
-              clients[i].opponent = NULL;
-              free(clients[i].game);
-              clients[i].game = NULL;
-            }
-            remove_client(clients, i, &actual);
-            strncpy(buffer, client.name, BUF_SIZE - 1);
-            strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
+            free_client(&clients[i]);
+            update_clients(clients, i, &actual);
             // send_message_to_all_clients(clients, client, actual, buffer, 1);
           } else {
             char request_type = buffer[0];
             switch (request_type) {
             case CHALLENGE_REQUEST: {
-              printf("Player challenged: %s\n", &buffer[1]);
-              int j;
-              for (j = 0; j < actual; j++) {
-                if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CONFIRM_CHALLENGE;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  free(request);
-                }
-              }
+              handle_challenge_request(&buffer[1], &clients[i], clients,
+                                       actual);
               break;
             }
             case CHALLENGE_ACCEPTED: {
-              printf("Challenge accepted\n");
-              char *challenger = &buffer[1];
+              char *challenger_name = &buffer[1];
               int j;
               for (j = 0; j < actual; j++) {
-                if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CHALLENGE_ACCEPTED;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  GameState *game = newGame();
-                  clients[i].game = clients[j].game = game;
-                  int turn = rand() % 2;
-                  clients[i].turn = turn;
-                  clients[j].turn = 1 - turn;
-                  // Write the game to both players
-                  write_game(&clients[i], -1, -1);
-                  write_game(&clients[j], -1, -1);
-                  clients[i].opponent = &clients[j];
-                  clients[j].opponent = &clients[i];
-                  clients[i].chat = &clients[j];
-                  clients[j].chat = &clients[i];
-                  free(request);
+                if (strcmp(clients[j].name, &challenger_name[1]) == 0) {
+                  handle_challenge_accepted(&clients[j], &clients[i]);
+                  break;
                 }
               }
               break;
             }
             case CHALLENGE_REFUSED: {
-              printf("Challenge to %s refused\n", &buffer[1]);
               int j;
               for (j = 0; j < actual; j++) {
                 if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CHALLENGE_REFUSED;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  free(request);
+                  handle_challenge_refused(&clients[j], &clients[i]);
                 }
               }
               break;
             }
             case MOVE_DATA: {
-              int moveResult = makeMove(buffer[1], clients[i].game);
-              write_game(&clients[i], moveResult, buffer[1]);
-              if (moveResult) {
-                write_game(clients[i].opponent, moveResult, buffer[1]);
-              }
-              if (hasEnded(clients[i].game)) {
-                buffer[0] = END_GAME;
-                write_client(clients[i].sock, buffer, 1);
-                write_client(clients[i].opponent->sock, buffer, 1);
-                free(clients[i].game);
-                clients[i].game = clients[i].opponent->game = NULL;
-                clients[i].opponent->opponent = NULL;
-                clients[i].opponent = NULL;
-              }
+              handle_move_data(&clients[i], buffer[1]);
               break;
             }
             case LIST_ONLINE_PLAYERS: {
-              int total_len = 0;
-              for (int j = 0; j < actual; j++) {
-                total_len += strlen(clients[j].name);
-              }
-              int packet_size = 2 + actual + total_len;
-              char *request = (char *)malloc(packet_size);
-              request[0] = ONLINE_PLAYERS_RESPONSE;
-              request[1] = (char)actual;
-              int pos = 2;
-              for (int j = 0; j < actual; j++) {
-                memcpy(&request[pos], clients[j].name, strlen(clients[j].name));
-                pos += strlen(clients[j].name);
-                request[pos++] = 0;
-              }
-              write_client(clients[i].sock, request, packet_size);
-              free(request);
+              handle_list_online_players(clients, actual, &clients[i]);
               break;
             }
             case CHAT_REQUEST: {
-              printf("Player to chat: %s\n", &buffer[1]);
               int j;
               for (j = 0; j < actual; j++) {
                 if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CONFIRM_CHAT;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  free(request);
+                  handle_chat_request(&clients[i], &clients[j]);
+                  break;
+                }
+                if (j == actual) {
+                  char request[] = {PLAYER_NOT_FOUND};
+                  write_client(clients[i].sock, request, 1);
                 }
                 // send_message_to_all_clients(clients, client, actual, buffer,
                 // 0);
@@ -229,18 +167,10 @@ static void appServer(void) {
               break;
             }
             case CHAT_ACCEPTED: {
-              printf("Chat with %s accepted\n", &buffer[1]);
               int j;
               for (j = 0; j < actual; j++) {
                 if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CHAT_ACCEPTED;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  clients[i].chat = &clients[j];
-                  clients[j].chat = &clients[i];
-                  free(request);
+                  handle_chat_accepted(&clients[i], &clients[j]);
                 }
               }
               break;
@@ -250,29 +180,13 @@ static void appServer(void) {
               int j;
               for (j = 0; j < actual; j++) {
                 if (strcmp(clients[j].name, &buffer[1]) == 0) {
-                  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
-                  request[0] = CHAT_REFUSED;
-                  memcpy(request + 1, clients[i].name, strlen(clients[i].name));
-                  request[1 + strlen(clients[i].name)] = 0;
-                  write_string(clients[j].sock, request);
-                  free(request);
+                  handle_chat_refused(&clients[i], &clients[j]);
                 }
               }
               break;
             }
             case CHAT_MESSAGE: {
-              char *response = (char *)malloc(4 + strlen(clients[i].name) +
-                                              strlen(&buffer[1]));
-              response[0] = CHAT_MESSAGE;
-              memcpy(response + 1, clients[i].name, strlen(clients[i].name));
-              int pos = 1 + strlen(clients[i].name);
-              response[pos++] = ':';
-              response[pos++] = ' ';
-              memcpy(&response[pos], buffer, strlen(buffer));
-              pos += strlen(buffer);
-              response[pos] = 0;
-              write_string(clients[i].chat->sock, response);
-              free(response);
+              handle_chat_message(&clients[i], &buffer[1]);
               break;
             }
               // send_message_to_all_clients(clients, client, actual, buffer,
@@ -294,7 +208,7 @@ static void clear_clients(Client *clients, int actual) {
   }
 }
 
-static void remove_client(Client *clients, int to_remove, int *actual) {
+static void update_clients(Client *clients, int to_remove, int *actual) {
   /* we remove the client in the array */
   memmove(clients + to_remove, clients + to_remove + 1,
           (*actual - to_remove - 1) * sizeof(Client));
@@ -404,6 +318,145 @@ static void write_game(Client *client, int moveResult, int move) {
 
   free(buffer);
 }
+
+// Message handling
+static void handle_challenge_request(char *client_name, Client *sender,
+                                     Client *clients, int client_number) {
+  int j;
+  for (int j = 0; j < client_number; j++) {
+    if (strcmp(clients[j].name, client_name) == 0) {
+      char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+      request[0] = CONFIRM_CHALLENGE;
+      memcpy(request + 1, sender->name, strlen(sender->name));
+      request[1 + strlen(sender->name)] = 0;
+      write_string(clients[j].sock, request);
+      free(request);
+      break;
+    }
+  }
+  if (j == client_number) {
+    char request[] = {PLAYER_NOT_FOUND};
+    write_client(sender->sock, request, 1);
+  }
+}
+
+static void handle_challenge_accepted(Client *challenger, Client *challengee) {
+  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+  request[0] = CHALLENGE_ACCEPTED;
+  memcpy(request + 1, challengee->name, strlen(challengee->name));
+  request[1 + strlen(challengee->name)] = 0;
+  write_string(challenger->sock, request);
+  GameState *game = newGame();
+  challengee->game = challenger->game = game;
+  int turn = rand() % 2;
+  challengee->turn = turn;
+  challenger->turn = 1 - turn;
+  // Write the game to both players
+  write_game(challenger, -1, -1);
+  write_game(challengee, -1, -1);
+  challengee->opponent = challenger;
+  challenger->opponent = challengee;
+  challengee->chat = challenger;
+  challenger->chat = challengee;
+  free(request);
+}
+
+static void handle_challenge_refused(Client *challenger, Client *challengee) {
+  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+  request[0] = CHALLENGE_REFUSED;
+  memcpy(request + 1, challengee->name, strlen(challengee->name));
+  request[1 + strlen(challengee->name)] = 0;
+  write_string(challenger->sock, request);
+  free(request);
+}
+
+static void handle_move_data(Client *player, short move) {
+  int moveResult = makeMove(move, player->game);
+  write_game(player, moveResult, move);
+  if (moveResult) {
+    write_game(player->opponent, moveResult, move);
+  }
+  if (hasEnded(player->game)) {
+    char end_game_payload[] = {END_GAME};
+    write_client(player->sock, end_game_payload, 1);
+    write_client(player->opponent->sock, end_game_payload, 1);
+    free(player->game);
+    player->game = player->opponent->game = NULL;
+    player->opponent->opponent = NULL;
+    player->opponent = NULL;
+  }
+}
+
+static void handle_list_online_players(Client *clients, int client_number,
+                                       Client *requestor) {
+  int total_len = 0;
+  for (int j = 0; j < client_number; j++) {
+    total_len += strlen(clients[j].name);
+  }
+  int packet_size = 2 + client_number + total_len;
+  char *request = (char *)malloc(packet_size);
+  request[0] = ONLINE_PLAYERS_RESPONSE;
+  request[1] = (char)client_number;
+  int pos = 2;
+  for (int j = 0; j < client_number; j++) {
+    memcpy(&request[pos], clients[j].name, strlen(clients[j].name));
+    pos += strlen(clients[j].name);
+    request[pos++] = 0;
+  }
+  write_client(requestor->sock, request, packet_size);
+  free(request);
+}
+
+static void handle_chat_request(Client *sender, Client *receiver) {
+  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+  request[0] = CONFIRM_CHAT;
+  memcpy(request + 1, sender->name, strlen(sender->name));
+  request[1 + strlen(sender->name)] = 0;
+  write_string(receiver->sock, request);
+  free(request);
+}
+
+static void handle_chat_accepted(Client *sender, Client *receiver) {
+  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+  request[0] = CHAT_ACCEPTED;
+  memcpy(request + 1, sender->name, strlen(sender->name));
+  request[1 + strlen(sender->name)] = 0;
+  write_string(receiver->sock, request);
+  sender->chat = receiver;
+  receiver->chat = sender;
+  free(request);
+}
+
+static void handle_chat_refused(Client *sender, Client *receiver) {
+  char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
+  request[0] = CHAT_REFUSED;
+  memcpy(request + 1, sender->name, strlen(sender->name));
+  request[1 + strlen(sender->name)] = 0;
+  write_string(receiver->sock, request);
+  sender->chat = receiver;
+  receiver->chat = sender;
+  free(request);
+}
+
+static void handle_chat_message(Client *sender, char *message) {
+  if (strcmp("exit", message) == 0) {
+    char response[] = {END_CHAT};
+    write_string(sender->chat->sock, response);
+    write_string(sender->sock, response);
+  }
+  char *response = (char *)malloc(4 + strlen(sender->name) + strlen(message));
+  response[0] = CHAT_MESSAGE;
+  memcpy(response + 1, sender->name, strlen(sender->name));
+  int pos = 1 + strlen(sender->name);
+  response[pos++] = ':';
+  response[pos++] = ' ';
+  memcpy(&response[pos], message, strlen(message));
+  pos += strlen(message);
+  response[pos] = 0;
+  write_string(sender->chat->sock, response);
+  free(response);
+}
+
 /*static void write_client(SOCKET sock, const char *buffer) {
   if (send(sock, buffer, strlen(buffer), 0) < 0) {
     perror("send()");

@@ -126,14 +126,7 @@ static void appClient(const char *address, const char *name) {
         }
       } else if ((status == PLAYER_TURN || status == PLAYER_WAIT) &&
                  atoi(buffer) == 0) {
-        printf("Sending chat message\n");
-        char *request = (char *)malloc(2 + strlen(buffer));
-        request[0] = CHAT_MESSAGE;
-        memcpy(&request[1], buffer, strlen(buffer));
-        request[1 + strlen(buffer)] = 0;
-        write_server(sock, request);
-        free(request);
-
+        send_chat_message(sock, buffer);
       } else if (status == PLAYER_TURN) {
         buffer[1] = atoi(buffer) - 1;
         if (buffer[1] < 0 || buffer[1] >= 12) {
@@ -146,13 +139,7 @@ static void appClient(const char *address, const char *name) {
         printf("It is not your turn. You must wait.\n");
         continue;
       } else if (status == CHAT_MODE) {
-        printf("Sending chat message\n");
-        char *request = (char *)malloc(2 + strlen(buffer));
-        request[0] = CHAT_MESSAGE;
-        memcpy(&request[1], buffer, strlen(buffer));
-        request[1 + strlen(buffer)] = 0;
-        write_server(sock, request);
-        free(request);
+        send_chat_message(sock, buffer);
       }
 
     } else if (FD_ISSET(sock, &rdfs)) {
@@ -162,27 +149,7 @@ static void appClient(const char *address, const char *name) {
       switch (request_type) {
       case CONFIRM_CHALLENGE: {
         char *challenger = &buffer[1];
-        printf("You have an incoming challenge from %s. Do you want to accept?",
-               challenger);
-        char answer;
-        scanf("%c", &answer);
-        if (answer == 'y') {
-          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
-          response[0] = CHALLENGE_ACCEPTED;
-          memcpy(response + 1, challenger, strlen(challenger));
-          response[1 + strlen(challenger)] = 0;
-          write_server(sock, response);
-          status = PLAYER_TURN;
-          free(response);
-        } else {
-          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
-          response[0] = CHALLENGE_REFUSED;
-          memcpy(response + 1, challenger, strlen(challenger));
-          response[1 + strlen(challenger)] = 0;
-          write_server(sock, response);
-          status = MENU_NOT_SHOWN;
-          free(response);
-        }
+        status = handle_confirm_challenge(sock, challenger);
         break;
       }
       case CHALLENGE_ACCEPTED: {
@@ -193,41 +160,23 @@ static void appClient(const char *address, const char *name) {
       }
       case MOVE_FAIL: {
         printf("Invalid move\n");
+        status = handle_game_data(game, buffer);
+        break;
       }
       case MOVE_SUCCESS: {
-        if (request_type == MOVE_SUCCESS) {
-          int move = buffer[2 + PLAYERS + BOARD_SIZE];
-          if (game->replay.root == NULL) {
-            game->replay.root = game->replay.cur = newList(move);
-          } else {
-            game->replay.cur = addNext(game->replay.cur, move);
-          }
-        }
-        saveGame("myGame.txt", game);
+        int move = buffer[2 + PLAYERS + BOARD_SIZE];
+        handle_move_success(game, move);
+        status = handle_game_data(game, buffer);
+      }
+      // TODO: Write to the user if he plays first or second
+      case GAME_DATA: {
+        status = handle_game_data(game, buffer);
+        break;
       }
       case CHALLENGE_REFUSED: {
         char *challengee = &buffer[1];
         printf("Challenge to %s refused\n", challengee);
         status = MENU_NOT_SHOWN;
-        break;
-      }
-      // TODO: Write to the user if he plays first or second
-      case GAME_DATA: {
-        game->turn = buffer[1];
-        for (int i = 0; i < PLAYERS; i++) {
-          game->scores[i] = buffer[2 + i];
-        }
-        for (int i = 0; i < BOARD_SIZE; i++) {
-          game->board[i] = buffer[2 + PLAYERS + i];
-        }
-        renderGame(game);
-        if (game->turn == 0) {
-          status = PLAYER_TURN;
-          printf("It is your turn.\n");
-        } else {
-          printf("Wait for your opponent to play.\n");
-          status = PLAYER_WAIT;
-        }
         break;
       }
       case OPPONENT_DISCONNECTED: {
@@ -236,58 +185,15 @@ static void appClient(const char *address, const char *name) {
         getchar();
       }
       case END_GAME: {
-        if (game->scores[0] > game->scores[1]) {
-          printf("Congratulation! You won!\n");
-        } else if (game->scores[0] < game->scores[1]) {
-          printf("You lost!\n");
-        } else {
-          printf("It is a tie!\n");
-        }
-        printf("Do you want to save the replay?(y/n) ");
-        char ans;
-        scanf("%c", &ans);
-        if (tolower(ans) == 'y') {
-          printf("Enter the name of the file to save the game: ");
-          scanf("%s", buffer);
-          saveGame(buffer, game);
-        }
-        free(game);
-        game = NULL;
-        status = MENU_NOT_SHOWN;
+        handle_end_game(game);
         break;
       }
       case ONLINE_PLAYERS_RESPONSE: {
-        int client_number = buffer[1];
-        int pos = 2;
-        printf("Online players\n");
-        for (int i = 0; i < client_number; i++) {
-          printf("%s\n", &buffer[pos]);
-          pos += strlen(&buffer[pos]) + 1;
-        }
+        status = handle_online_players_response(buffer);
         break;
       }
       case CONFIRM_CHAT: {
-        printf("Player %s want to chat to you. Do you accept(y/n)?",
-               &buffer[1]);
-        char accept;
-        scanf("%c", &accept);
-        if (accept == 'y') {
-          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
-          response[0] = CHAT_ACCEPTED;
-          memcpy(&response[1], &buffer[1], strlen(&buffer[1]));
-          response[1 + strlen(&buffer[1])] = 0;
-          write_server(sock, response);
-          status = CHAT_MODE;
-          free(response);
-        } else {
-          char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
-          response[0] = CHAT_REFUSED;
-          memcpy(&response[1], &buffer[1], strlen(&buffer[1]));
-          response[1 + strlen(&buffer[1])] = 0;
-          write_server(sock, response);
-          status = MENU_NOT_SHOWN;
-          free(response);
-        }
+        handle_confirm_chat(sock, &buffer[1]);
         break;
       }
       case CHAT_ACCEPTED: {
@@ -302,6 +208,15 @@ static void appClient(const char *address, const char *name) {
       }
       case CHAT_MESSAGE: {
         printf("%s\n", &buffer[1]);
+        break;
+      }
+      case END_CHAT: {
+        printf("The chat ended.\n");
+        status = MENU_NOT_SHOWN;
+      }
+      case PLAYER_NOT_FOUND: {
+        printf("The player isn't connected.\n");
+        status = MENU_NOT_SHOWN;
         break;
       }
       }
@@ -379,4 +294,120 @@ int main(int argc, char **argv) {
   end();
 
   return EXIT_SUCCESS;
+}
+
+// Message handling
+static void send_chat_message(SOCKET sock, const char *message) {
+  char *request = (char *)malloc(2 + strlen(message));
+  request[0] = CHAT_MESSAGE;
+  memcpy(&request[1], message, strlen(message));
+  request[1 + strlen(message)] = 0;
+  write_server(sock, request);
+  free(request);
+}
+
+static int handle_confirm_challenge(SOCKET sock, const char *challenger) {
+  printf("You have an incoming challenge from %s. Do you want to accept?",
+         challenger);
+  char answer;
+  scanf("%c", &answer);
+  if (answer == 'y') {
+    char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+    response[0] = CHALLENGE_ACCEPTED;
+    memcpy(response + 1, challenger, strlen(challenger));
+    response[1 + strlen(challenger)] = 0;
+    write_server(sock, response);
+    free(response);
+    return PLAYER_TURN;
+  } else {
+    char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+    response[0] = CHALLENGE_REFUSED;
+    memcpy(response + 1, challenger, strlen(challenger));
+    response[1 + strlen(challenger)] = 0;
+    write_server(sock, response);
+    free(response);
+    return MENU_NOT_SHOWN;
+  }
+}
+
+static void handle_move_success(GameState *game, int move) {
+  if (game->replay.root == NULL) {
+    game->replay.root = game->replay.cur = newList(move);
+  } else {
+    game->replay.cur = addNext(game->replay.cur, move);
+  }
+}
+
+static int handle_game_data(GameState *game, char *buffer) {
+  game->turn = buffer[1];
+  for (int i = 0; i < PLAYERS; i++) {
+    game->scores[i] = buffer[2 + i];
+  }
+  for (int i = 0; i < BOARD_SIZE; i++) {
+    game->board[i] = buffer[2 + PLAYERS + i];
+  }
+  renderGame(game);
+  if (game->turn == 0) {
+    return PLAYER_TURN;
+    printf("It is your turn.\n");
+  } else {
+    printf("Wait for your opponent to play.\n");
+    return PLAYER_WAIT;
+  }
+}
+
+static int handle_end_game(GameState *game) {
+  char buffer[BUF_SIZE];
+  if (game->scores[0] > game->scores[1]) {
+    printf("Congratulation! You won!\n");
+  } else if (game->scores[0] < game->scores[1]) {
+    printf("You lost!\n");
+  } else {
+    printf("It is a tie!\n");
+  }
+  printf("Do you want to save the replay?(y/n) ");
+  char ans;
+  scanf("%c", &ans);
+  if (tolower(ans) == 'y') {
+    printf("Enter the name of the file to save the game: ");
+    scanf("%s", buffer);
+    saveGame(buffer, game);
+  }
+  free(game);
+  game = NULL;
+  return MENU_NOT_SHOWN;
+}
+
+static int handle_online_players_response(char *buffer) {
+  int client_number = buffer[1];
+  int pos = 2;
+  printf("Online players\n");
+  for (int i = 0; i < client_number; i++) {
+    printf("%s\n", &buffer[pos]);
+    pos += strlen(&buffer[pos]) + 1;
+  }
+  return MENU_NOT_SHOWN;
+}
+
+static int handle_confirm_chat(SOCKET sock, char *name) {
+  printf("Player %s want to chat to you. Do you accept(y/n)?", name);
+  char accept;
+  scanf("%c", &accept);
+  if (accept == 'y') {
+    char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+    response[0] = CHAT_ACCEPTED;
+    memcpy(&response[1], name, strlen(name));
+    response[1 + strlen(name)] = 0;
+    write_server(sock, response);
+    return CHAT_MODE;
+    free(response);
+  } else {
+    char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
+    response[0] = CHAT_REFUSED;
+    memcpy(&response[1], name, strlen(name));
+    response[1 + strlen(name)] = 0;
+    write_server(sock, response);
+    return MENU_NOT_SHOWN;
+    free(response);
+  }
 }

@@ -53,10 +53,25 @@ static int init_connection_server(void);
 static void end_connection(int sock);
 static int read_client(SOCKET sock, char *buffer);
 static void write_client(SOCKET sock, const char *buffer, unsigned int size);
-static void write_string(SOCKET sock, const char* buffer);
-static void write_game(Client* client, int moveResult, int move);
-static void send_message_to_all_clients(Client *clients, Client client, int actual, const char *buffer, char from_server);
-static void remove_client(Client *clients, int to_remove, int *actual);
+static void write_string(SOCKET sock, const char *buffer);
+static void write_game(Client *client, int moveResult, int move);
+static void send_message_to_all_clients(Client *clients, Client client,
+                                        int actual, const char *buffer,
+                                        char from_server);
+static void update_clients(Client *clients, int to_remove, int *actual);
 static void clear_clients(Client *clients, int actual);
+static void free_client(Client *client);
 
+static void handle_challenge_request(char *client_name, Client *sender,
+                                     Client *clients, int client_number);
+
+static void handle_challenge_accepted(Client *challenger, Client *challengee);
+static void handle_challenge_refused(Client *challenger, Client *challengee);
+static void handle_move_data(Client *player, short move);
+static void handle_list_online_players(Client *clients, int client_number,
+                                       Client *requestor);
+static void handle_chat_request(Client *requestor, Client *requested);
+static void handle_chat_accepted(Client *sender, Client *receiver);
+static void handle_chat_refused(Client *sender, Client *receiver);
+static void handle_chat_message(Client *sender, char *message);
 #endif /* guard */
