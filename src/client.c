@@ -145,7 +145,6 @@ static void appClient(const char *address, const char *name) {
     } else if (FD_ISSET(sock, &rdfs)) {
       int n = read_server(sock, buffer);
       char request_type = buffer[0];
-      printf("%d\n", (int)request_type);
       switch (request_type) {
       case CONFIRM_CHALLENGE: {
         char *challenger = &buffer[1];
@@ -160,17 +159,17 @@ static void appClient(const char *address, const char *name) {
       }
       case MOVE_FAIL: {
         printf("Invalid move\n");
-        status = handle_game_data(game, buffer);
+        status = handle_game_data(game, buffer, 0);
         break;
       }
       case MOVE_SUCCESS: {
         int move = buffer[2 + PLAYERS + BOARD_SIZE];
         handle_move_success(game, move);
-        status = handle_game_data(game, buffer);
+        status = handle_game_data(game, buffer, 0);
+        break;
       }
-      // TODO: Write to the user if he plays first or second
       case GAME_DATA: {
-        status = handle_game_data(game, buffer);
+        status = handle_game_data(game, buffer, 1);
         break;
       }
       case CHALLENGE_REFUSED: {
@@ -182,10 +181,9 @@ static void appClient(const char *address, const char *name) {
       case OPPONENT_DISCONNECTED: {
         game->scores[0] = 100;
         printf("Your opponent disconnected\n");
-        getchar();
       }
       case END_GAME: {
-        handle_end_game(game);
+        status = handle_end_game(game);
         break;
       }
       case ONLINE_PLAYERS_RESPONSE: {
@@ -338,7 +336,7 @@ static void handle_move_success(GameState *game, int move) {
   }
 }
 
-static int handle_game_data(GameState *game, char *buffer) {
+static int handle_game_data(GameState *game, char *buffer, int isGameStart) {
   game->turn = buffer[1];
   for (int i = 0; i < PLAYERS; i++) {
     game->scores[i] = buffer[2 + i];
@@ -348,9 +346,17 @@ static int handle_game_data(GameState *game, char *buffer) {
   }
   renderGame(game);
   if (game->turn == 0) {
-    return PLAYER_TURN;
+    if (isGameStart) {
+      printf("You play first. Your squares are on the top row. "
+             "Enter a number from 1-6.\n");
+    }
     printf("It is your turn.\n");
+    return PLAYER_TURN;
   } else {
+    if (isGameStart) {
+      printf("You play second. Your squares are on the bottom row. "
+             "Enter a number from 7-12.\n");
+    }
     printf("Wait for your opponent to play.\n");
     return PLAYER_WAIT;
   }
@@ -359,7 +365,7 @@ static int handle_game_data(GameState *game, char *buffer) {
 static int handle_end_game(GameState *game) {
   char buffer[BUF_SIZE];
   if (game->scores[0] > game->scores[1]) {
-    printf("Congratulation! You won!\n");
+    printf("Congratulations! You won!\n");
   } else if (game->scores[0] < game->scores[1]) {
     printf("You lost!\n");
   } else {
@@ -367,7 +373,9 @@ static int handle_end_game(GameState *game) {
   }
   printf("Do you want to save the replay?(y/n) ");
   char ans;
+  getchar();
   scanf("%c", &ans);
+  printf("%c\n", ans);
   if (tolower(ans) == 'y') {
     printf("Enter the name of the file to save the game: ");
     scanf("%s", buffer);

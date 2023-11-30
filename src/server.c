@@ -27,8 +27,11 @@ static void end(void) {
 }
 
 static void free_client(Client *client) {
+  char buffer[1];
+  buffer[0] = OPPONENT_DISCONNECTED;
   closesocket(client->sock);
   if (client->opponent != NULL) {
+    write_client(client->opponent->sock, buffer, 1);
     client->opponent->opponent = NULL;
     client->opponent->game = NULL;
     client->opponent = NULL;
@@ -95,6 +98,9 @@ static void appServer(void) {
       FD_SET(csock, &rdfs);
 
       Client c;
+      c.chat = NULL;
+      c.game = NULL;
+      c.opponent = NULL;
       c.sock = csock;
       c.name = (char *)malloc(20 * sizeof(char));
       fflush(stdout);
@@ -126,7 +132,7 @@ static void appServer(void) {
               char *challenger_name = &buffer[1];
               int j;
               for (j = 0; j < actual; j++) {
-                if (strcmp(clients[j].name, &challenger_name[1]) == 0) {
+                if (strcmp(clients[j].name, challenger_name) == 0) {
                   handle_challenge_accepted(&clients[j], &clients[i]);
                   break;
                 }
@@ -323,7 +329,7 @@ static void write_game(Client *client, int moveResult, int move) {
 static void handle_challenge_request(char *client_name, Client *sender,
                                      Client *clients, int client_number) {
   int j;
-  for (int j = 0; j < client_number; j++) {
+  for (j = 0; j < client_number; j++) {
     if (strcmp(clients[j].name, client_name) == 0) {
       char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
       request[0] = CONFIRM_CHALLENGE;

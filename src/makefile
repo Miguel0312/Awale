@@ -19,13 +19,13 @@ OBJ_SERVER = $(patsubst %,$(ODIR)/%,$(_OBJ_SERVER))
 
 
 $(ODIR)/%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -g -c -o $@ $< $(CFLAGS)
 
 client: $(OBJ_CLIENT)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -g -o $@ $^ $(CFLAGS)
 
 server: $(OBJ_SERVER)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -g -o $@ $^ $(CFLAGS)
 
 .PHONY: clean
 

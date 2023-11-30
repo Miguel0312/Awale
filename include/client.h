@@ -51,7 +51,7 @@ static void write_server(SOCKET sock, const char *buffer);
 static void send_chat_message(SOCKET sock, const char *message);
 static int handle_confirm_challenge(SOCKET sock, const char *challenger);
 static void handle_move_success(GameState *game, int move);
-static int handle_game_data(GameState *game, char *buffer);
+static int handle_game_data(GameState *game, char *buffer, int isGameStart);
 static int handle_end_game(GameState *game);
 static int handle_online_players_response(char *buffer);
 static int handle_confirm_chat(SOCKET sock, char *name);
