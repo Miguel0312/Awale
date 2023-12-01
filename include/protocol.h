@@ -27,4 +27,9 @@
 #define CHAT_MESSAGE 20
 #define END_CHAT 21
 
+#define OBSERVER_REQUEST 23
+#define OBSERVER_SUCCESS 24
+#define OBSERVER_FAIL 25
+#define OBSERVER_GAME_DATA 26
+
 #endif

@@ -39,6 +39,7 @@ typedef struct in_addr IN_ADDR;
 #define PLAYER_TURN 2
 #define PLAYER_WAIT 3
 #define CHAT_MODE 4
+#define OBSERVING 5
 
 static void init(void);
 static void end(void);
@@ -55,4 +56,5 @@ static int handle_game_data(GameState *game, char *buffer, int isGameStart);
 static int handle_end_game(GameState *game);
 static int handle_online_players_response(char *buffer);
 static int handle_confirm_chat(SOCKET sock, char *name);
+static void observer_handle_game_data(GameState *game, char *buffer);
 #endif /* guard */

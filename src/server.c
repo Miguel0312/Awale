@@ -26,11 +26,17 @@ static void end(void) {
 #endif
 }
 
-static void free_client(Client *client) {
+static void free_client(Client *client, Client *clients, int actual) {
   char buffer[1];
   buffer[0] = OPPONENT_DISCONNECTED;
   closesocket(client->sock);
   if (client->opponent != NULL) {
+    for (int j = 0; j < actual; j++) {
+      if (clients[j].observing == client->game) {
+        write_client(clients[j].sock, buffer, 1);
+        clients[j].observing = NULL;
+      }
+    }
     write_client(client->opponent->sock, buffer, 1);
     client->opponent->opponent = NULL;
     client->opponent->game = NULL;
@@ -117,7 +123,7 @@ static void appServer(void) {
           int c = read_client(clients[i].sock, buffer);
           /* client disconnected */
           if (c == 0) {
-            free_client(&clients[i]);
+            free_client(&clients[i], clients, actual);
             update_clients(clients, i, &actual);
             // send_message_to_all_clients(clients, client, actual, buffer, 1);
           } else {
@@ -149,7 +155,7 @@ static void appServer(void) {
               break;
             }
             case MOVE_DATA: {
-              handle_move_data(&clients[i], buffer[1]);
+              handle_move_data(&clients[i], buffer[1], clients, actual);
               break;
             }
             case LIST_ONLINE_PLAYERS: {
@@ -195,8 +201,19 @@ static void appServer(void) {
               handle_chat_message(&clients[i], &buffer[1]);
               break;
             }
-              // send_message_to_all_clients(clients, client, actual, buffer,
-              // 0);
+            case OBSERVER_REQUEST: {
+              int success = 0;
+              for (int j = 0; j < actual; j++) {
+                if (strcmp(clients[j].name, &buffer[1]) == 0) {
+                  success = handle_observer_request(&clients[i], &clients[j]);
+                  break;
+                }
+              }
+              if (!success) {
+                char request[] = {OBSERVER_FAIL};
+                write_client(clients[i].sock, request, 1);
+              }
+            }
             }
           }
         }
@@ -376,14 +393,26 @@ static void handle_challenge_refused(Client *challenger, Client *challengee) {
   free(request);
 }
 
-static void handle_move_data(Client *player, short move) {
+static void handle_move_data(Client *player, short move, Client *clients,
+                             int actual) {
   int moveResult = makeMove(move, player->game);
   write_game(player, moveResult, move);
   if (moveResult) {
     write_game(player->opponent, moveResult, move);
+    for (int j = 0; j < actual; j++) {
+      if (clients[j].observing == player->game) {
+        write_game_observer(&clients[j], player->game);
+      }
+    }
   }
   if (hasEnded(player->game)) {
     char end_game_payload[] = {END_GAME};
+    for (int j = 0; j < actual; j++) {
+      if (clients[j].observing == player->game) {
+        clients[j].observing = NULL;
+        write_client(player->sock, end_game_payload, 1);
+      }
+    }
     write_client(player->sock, end_game_payload, 1);
     write_client(player->opponent->sock, end_game_payload, 1);
     free(player->game);
@@ -463,12 +492,33 @@ static void handle_chat_message(Client *sender, char *message) {
   free(response);
 }
 
-/*static void write_client(SOCKET sock, const char *buffer) {
-  if (send(sock, buffer, strlen(buffer), 0) < 0) {
-    perror("send()");
-    exit(errno);
+static int handle_observer_request(Client *observer, Client *observed) {
+  if (observed->game == NULL) {
+    return 0;
   }
-}*/
+  char response[1];
+  response[0] = OBSERVER_SUCCESS;
+  write_client(observer->sock, response, 1);
+  write_game_observer(observer, observed->game);
+  observer->observing = observed->game;
+
+  return 1;
+}
+
+static void write_game_observer(Client *observer, GameState *game) {
+  char *buffer = malloc((1 + PLAYERS + BOARD_SIZE) * sizeof(char));
+
+  buffer[0] = OBSERVER_GAME_DATA;
+  for (int i = 0; i < PLAYERS; i++) {
+    buffer[1 + i] = game->scores[i];
+  }
+  for (int i = 0; i < BOARD_SIZE; i++) {
+    buffer[1 + PLAYERS + i] = game->board[i];
+  }
+
+  write_client(observer->sock, buffer, 1 + PLAYERS + BOARD_SIZE);
+  free(buffer);
+}
 
 int main(int argc, char **argv) {
   init();
