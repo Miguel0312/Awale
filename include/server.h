@@ -44,6 +44,7 @@ typedef struct Client {
   int turn;
   struct Client *opponent;
   struct Client *chat;
+  GameState *observing;
 } Client;
 
 static void init(void);
@@ -60,18 +61,21 @@ static void send_message_to_all_clients(Client *clients, Client client,
                                         char from_server);
 static void update_clients(Client *clients, int to_remove, int *actual);
 static void clear_clients(Client *clients, int actual);
-static void free_client(Client *client);
+static void free_client(Client *client, Client *clients, int actual);
 
 static void handle_challenge_request(char *client_name, Client *sender,
                                      Client *clients, int client_number);
 
 static void handle_challenge_accepted(Client *challenger, Client *challengee);
 static void handle_challenge_refused(Client *challenger, Client *challengee);
-static void handle_move_data(Client *player, short move);
+static void handle_move_data(Client *player, short move, Client *clients,
+                             int actual);
 static void handle_list_online_players(Client *clients, int client_number,
                                        Client *requestor);
 static void handle_chat_request(Client *requestor, Client *requested);
 static void handle_chat_accepted(Client *sender, Client *receiver);
 static void handle_chat_refused(Client *sender, Client *receiver);
 static void handle_chat_message(Client *sender, char *message);
+static int handle_observer_request(Client *observer, Client *observed);
+static void write_game_observer(Client *observer, GameState *game);
 #endif /* guard */

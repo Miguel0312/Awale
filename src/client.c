@@ -48,6 +48,7 @@ static void show_start_menu() {
   printf("2 - List online players.\n");
   printf("3 - Start chat.\n");
   printf("4 - Watch replay\n");
+  printf("5 - Watch a live game\n");
   printf("6 - Exit\n");
 }
 
@@ -125,6 +126,14 @@ static void appClient(const char *address, const char *name) {
           status = MENU_NOT_SHOWN;
           break;
         }
+        case '5': {
+          printf("Enter the name of the player that you want to watch.");
+          char buf[1 + MAX_USERNAME_SIZE];
+          buf[0] = OBSERVER_REQUEST;
+          scanf("%s", &buf[1]);
+          write_server(sock, buf);
+          break;
+        }
         case '6': {
           exit(0);
         }
@@ -184,12 +193,16 @@ static void appClient(const char *address, const char *name) {
         break;
       }
       case OPPONENT_DISCONNECTED: {
-        game->scores[0] = 100;
-        printf("Your opponent disconnected\n");
-        status = handle_end_game(game);
+        if (status == OBSERVING) {
+          printf("A player has disconnected\n");
+          status = MENU_NOT_SHOWN;
+        } else {
+          game->scores[0] = 100;
+          status = handle_end_game(game);
+          printf("Your opponent disconnected\n");
+        }
         break;
       }
-
       case GAME_FORFEIT: {
         game->scores[0] = 100;
         printf("Your opponent forfeited\n");
@@ -197,7 +210,12 @@ static void appClient(const char *address, const char *name) {
         break;
       }
       case END_GAME: {
-        status = handle_end_game(game);
+        if (status == OBSERVING) {
+          printf("The game has ended\n");
+          status = MENU_NOT_SHOWN;
+        } else {
+          status = handle_end_game(game);
+        }
         break;
       }
       case ONLINE_PLAYERS_RESPONSE: {
@@ -235,6 +253,19 @@ static void appClient(const char *address, const char *name) {
       case INVALID_USERNAME: {
         printf("The username is already taken.\n");
         exit(0);
+      }
+      case OBSERVER_SUCCESS: {
+        status = OBSERVING;
+        break;
+      }
+      case OBSERVER_FAIL: {
+        printf("This player is not currently in a game\n");
+        status = MENU_NOT_SHOWN;
+        break;
+      }
+      case OBSERVER_GAME_DATA: {
+        observer_handle_game_data(game, buffer);
+        break;
       }
       }
       /* server down */
@@ -438,4 +469,14 @@ static int handle_confirm_chat(SOCKET sock, char *name) {
     return MENU_NOT_SHOWN;
     free(response);
   }
+}
+
+static void observer_handle_game_data(GameState *game, char *buffer) {
+  for (int i = 0; i < PLAYERS; i++) {
+    game->scores[i] = buffer[1 + i];
+  }
+  for (int i = 0; i < BOARD_SIZE; i++) {
+    game->board[i] = buffer[1 + PLAYERS + i];
+  }
+  renderGame(game);
 }
