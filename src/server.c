@@ -106,8 +106,19 @@ static void appServer(void) {
       fflush(stdout);
       memcpy(c.name, buffer, strlen(buffer));
       c.name[strlen(buffer)] = 0;
-      clients[actual] = c;
-      actual++;
+      bool add_to_list = true;
+      for (int i = 0; i < actual; i++) {
+        if (strcmp(c.name, clients[i].name) == 0) {
+          char request[] = {INVALID_USERNAME};
+          write_client(csock, request, 1);
+          add_to_list = false;
+          break;
+        }
+      }
+      if (add_to_list) {
+        clients[actual] = c;
+        actual++;
+      }
     } else {
       int i = 0;
       for (i = 0; i < actual; i++) {
@@ -347,6 +358,10 @@ static void handle_challenge_request(char *client_name, Client *sender,
 }
 
 static void handle_challenge_accepted(Client *challenger, Client *challengee) {
+  if (challengee->opponent != NULL) {
+    char request[] = {GAME_FORFEIT};
+    write_client(challengee->opponent->sock, request, 1);
+  }
   char *request = (char *)malloc(MAX_USERNAME_SIZE + 1);
   request[0] = CHALLENGE_ACCEPTED;
   memcpy(request + 1, challengee->name, strlen(challengee->name));
@@ -449,6 +464,7 @@ static void handle_chat_message(Client *sender, char *message) {
     char response[] = {END_CHAT};
     write_string(sender->chat->sock, response);
     write_string(sender->sock, response);
+    return;
   }
   char *response = (char *)malloc(4 + strlen(sender->name) + strlen(message));
   response[0] = CHAT_MESSAGE;

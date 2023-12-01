@@ -48,6 +48,7 @@ static void show_start_menu() {
   printf("2 - List online players.\n");
   printf("3 - Start chat.\n");
   printf("4 - Watch replay\n");
+  printf("6 - Exit\n");
 }
 
 static void appClient(const char *address, const char *name) {
@@ -114,6 +115,7 @@ static void appClient(const char *address, const char *name) {
           char buf[MAX_USERNAME_SIZE];
           scanf("%s", buf);
           chat_request(sock, buf);
+          break;
         }
         case '4': {
           printf("Enter name of the replay file: ");
@@ -122,6 +124,9 @@ static void appClient(const char *address, const char *name) {
           replayGame(buf);
           status = MENU_NOT_SHOWN;
           break;
+        }
+        case '6': {
+          exit(0);
         }
         }
       } else if ((status == PLAYER_TURN || status == PLAYER_WAIT) &&
@@ -181,6 +186,15 @@ static void appClient(const char *address, const char *name) {
       case OPPONENT_DISCONNECTED: {
         game->scores[0] = 100;
         printf("Your opponent disconnected\n");
+        status = handle_end_game(game);
+        break;
+      }
+
+      case GAME_FORFEIT: {
+        game->scores[0] = 100;
+        printf("Your opponent forfeited\n");
+        status = handle_end_game(game);
+        break;
       }
       case END_GAME: {
         status = handle_end_game(game);
@@ -191,7 +205,7 @@ static void appClient(const char *address, const char *name) {
         break;
       }
       case CONFIRM_CHAT: {
-        handle_confirm_chat(sock, &buffer[1]);
+        status = handle_confirm_chat(sock, &buffer[1]);
         break;
       }
       case CHAT_ACCEPTED: {
@@ -211,11 +225,16 @@ static void appClient(const char *address, const char *name) {
       case END_CHAT: {
         printf("The chat ended.\n");
         status = MENU_NOT_SHOWN;
+        break;
       }
       case PLAYER_NOT_FOUND: {
         printf("The player isn't connected.\n");
         status = MENU_NOT_SHOWN;
         break;
+      }
+      case INVALID_USERNAME: {
+        printf("The username is already taken.\n");
+        exit(0);
       }
       }
       /* server down */
@@ -309,6 +328,7 @@ static int handle_confirm_challenge(SOCKET sock, const char *challenger) {
          challenger);
   char answer;
   scanf("%c", &answer);
+  getchar();
   if (answer == 'y') {
     char *response = (char *)malloc(1 + MAX_USERNAME_SIZE);
     response[0] = CHALLENGE_ACCEPTED;
@@ -373,9 +393,9 @@ static int handle_end_game(GameState *game) {
   }
   printf("Do you want to save the replay?(y/n) ");
   char ans;
-  getchar();
   scanf("%c", &ans);
-  printf("%c\n", ans);
+  getchar();
+  // printf("%c\n", ans);
   if (tolower(ans) == 'y') {
     printf("Enter the name of the file to save the game: ");
     scanf("%s", buffer);
