@@ -18,7 +18,7 @@ _OBJ_SERVER = server.o Awale.o LinkedList.o
 OBJ_SERVER = $(patsubst %,$(ODIR)/%,$(_OBJ_SERVER))
 
 
-$(ODIR)/%.o: %.c $(DEPS)
+$(ODIR)/%.o: src/%.c $(DEPS)
 	$(CC) -g -c -o $@ $< $(CFLAGS)
 
 client: $(OBJ_CLIENT)

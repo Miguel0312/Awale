@@ -1,6 +1,11 @@
 # Awale
 
-This project provides a server and client to play the game Awale.
+This project provides a server and a client to play the game Awale.
+
+# Build
+To build the server and the client, run respectively `make server` and `make client` from the root of the project. This will create the binaries `server` and `client` in the same directory.
+
+To run the server, it suffices to run `./server`, and to run a client, launch `./client [address] [username]`, which will connect you as the given user to the server located at the given IP address.
 
 # Client
 
@@ -21,3 +26,4 @@ When the game starts, each player receives instruction on the side of the board 
 During the game, if the player insert a line that do not start with a number, they send it as a chat message to their opponent.
 
 At the end of the game, the player has the option to save the game in a text file.
+

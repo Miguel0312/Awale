@@ -52,6 +52,6 @@ Mkfile.old
 dkms.conf
 
 .vscode/**
-src/client
-src/server
+./client
+./server
 src/*.txt
